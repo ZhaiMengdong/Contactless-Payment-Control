@@ -3,7 +3,7 @@
  * @Version: 
  * @Autor: ZMD
  * @Date: 2019-08-30 10:12:25
- * @LastEditTime: 2019-09-02 14:51:38
+ * @LastEditTime: 2019-09-02 16:23:45
  */
 /*******************************************************************************
  * Copyright (c) 2012, 2017 IBM Corp.
@@ -42,6 +42,7 @@
 #define AUTHENTICATION_RESULT_CLIENTID "authentication_result"  //接收无感支付平台返回信息的mqtt client id
 #define AUTHENTICATION_TOPIC    "authentication"    //进行充电车辆是否开通无感支付认证判断的mqtt client发送报文的主题
 #define SUBSCRIBE_TOPIC_1   "authentication_result" //mqtt client订阅的车辆身份验证的主题
+#define SUBSCRIBE_TOPIC_2   "payment_result"    //mqtt client订阅的支付结果的主题
 #define QOS         2   
 #define TIMEOUT     10000L
 #define GATEWAYID   "201908280033"  //网关id
@@ -83,6 +84,8 @@ void connlost(void *context, char *cause);
 void mqtt_server();
 
 char * encapsulation_payload(char *data_recv, char *client_addr);
+
+char * parse_payload(char * payload);
 
 unsigned char * SM4(char * put_data);
 
@@ -368,6 +371,9 @@ int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *m
     printf("   message: ");
 
     payloadptr = message->payload;
+
+    parse_payload(payloadptr);
+
     for(i=0; i<message->payloadlen; i++)
     {
         putchar(*payloadptr++);
@@ -404,6 +410,7 @@ void mqtt_server(){
     printf("Subscribing to topic %s\nfor client %s using QoS%d\n\n"
            "Press Q<Enter> to quit\n\n", SUBSCRIBE_TOPIC_1, CLIENTID, QOS);
     MQTTClient_subscribe(client, SUBSCRIBE_TOPIC_1, QOS);
+    MQTTClient_subscribe(client, SUBSCRIBE_TOPIC_2, QOS);
 
     do 
     {
@@ -426,6 +433,28 @@ char * encapsulation_payload(char *data_recv, char *client_addr){
     out = cJSON_Print(root);
     strcat(out, END_FLAG);
     return out;
+}
+
+char * parse_payload(char * payload){
+    char * out;
+    cJSON * json, *item;
+    char * result;
+    char * client_addr;
+
+    json = cJSON_Parse((char const *)payload);
+    if(!json){
+        printf("json parse error!");
+    } else
+    {
+        item = cJSON_GetObjectItem(json, "result");
+        result = item->valuestring;
+        item = cJSON_GetObjectItem(json, "client_addr");
+        client_addr = item->valuestring;
+        printf("result:%s\n client_addr:%s\n", result, client_addr);
+    }
+
+    return result;
+    
 }
 
 unsigned char * SM4(char * put_data){
