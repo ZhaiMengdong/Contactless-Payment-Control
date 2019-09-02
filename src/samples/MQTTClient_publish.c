@@ -3,7 +3,7 @@
  * @Version: 
  * @Autor: ZMD
  * @Date: 2019-08-30 10:12:25
- * @LastEditTime: 2019-09-02 14:04:39
+ * @LastEditTime: 2019-09-02 14:51:38
  */
 /*******************************************************************************
  * Copyright (c) 2012, 2017 IBM Corp.
@@ -48,7 +48,8 @@
 
 #define DATALEN 256
 
-#define SOCK_PORT 9988  //与充电桩通信的socket的端口号
+#define SOCK_PORT_AUTHENTICATION 9988  //车辆身份认证时与充电桩通信的socket的端口号
+#define SOCK_PORT_PAY 9998  //支付时与充电桩通信的socket的端口号
 #define BUFFER_LENGTH 1024
 #define MAX_CONN_LIMIT 512     //MAX connection limit
 
@@ -62,9 +63,12 @@ typedef struct
 {
     int sockfd;
     char * client_addr;
+    int socket_port;
 } extra_publish_message;    //网关在传输消息时额外封装的信息
 
 volatile MQTTClient_deliveryToken deliveredtoken;
+
+void socket_server(int port);
 
 static void Data_handle(void * sock_fd);   //Only can be seen in the file
 
@@ -86,13 +90,32 @@ unsigned char * SM4_ENC_ECB(SGD_HANDLE hSessionHandle, char * put_data);
 
 int main(int argc, char* argv[])
 {
+    char ch = '0';
     //开启一个线程用来启动一个mqtt client，该client用来接收无感支付平台发送的信息
     pthread_t mqtt_server_id;
+    pthread_t socket_authentication;
+    pthread_t socket_pay;
     if(pthread_create(&mqtt_server_id,NULL,(void *)(&mqtt_server),NULL))
         {
             fprintf(stderr,"pthread_create error!\n");
         }
+    if(pthread_create(&socket_authentication, NULL, (void *)(&socket_server), SOCK_PORT_AUTHENTICATION)){
+        fprintf(stderr,"pthread_create error!\n");
+    }
+    if(pthread_create(&socket_authentication, NULL, (void *)(&socket_server), SOCK_PORT_PAY)){
+        fprintf(stderr,"pthread_create error!\n");
+    }
+    
+    printf("输入Q或者q结束程序\n");
+    do 
+    {
+        ch = getchar();
+    } while(ch!='Q' && ch != 'q');
 
+    return 0;
+}
+
+void socket_server(int port){
     //创建一个本地socket，用来接收充电桩发来的报文
     int sockfd_server;
     int sockfd;
@@ -108,7 +131,7 @@ int main(int argc, char* argv[])
     memset(&s_addr_in,0,sizeof(s_addr_in));
     s_addr_in.sin_family = AF_INET;
     s_addr_in.sin_addr.s_addr = htonl(INADDR_ANY);  //trans addr from uint32_t host byte order to network byte order.
-    s_addr_in.sin_port = htons(SOCK_PORT);          //trans port from uint16_t host byte order to network byte order.
+    s_addr_in.sin_port = htons(port);          //trans port from uint16_t host byte order to network byte order.
     fd_temp = bind(sockfd_server,(struct scokaddr *)(&s_addr_in),sizeof(s_addr_in));
     if(fd_temp == -1)
     {
@@ -148,6 +171,7 @@ int main(int argc, char* argv[])
 
         extra_message.client_addr = client_addr;
         extra_message.sockfd = sockfd;
+        extra_message.socket_port = port;
 
         //每建立一个socket连接，相当于一个充电桩向网关发送报文，开启一个线程去进行报文的处理
         if(pthread_create(&thread_id,NULL,(void *)(&Data_handle),(void *)(&extra_message)) == -1)
@@ -162,7 +186,6 @@ int main(int argc, char* argv[])
     assert(ret != -1);
 
     printf("Server shuts down\n");
-    return 0;
 }
 
 /**
@@ -194,6 +217,15 @@ static void Data_handle(void * message)
     MQTTClient_message pubmsg = MQTTClient_message_initializer;
     MQTTClient_deliveryToken token;
     int rc;
+    char * mqtt_topic = NULL;
+
+    if (extra_message.socket_port == SOCK_PORT_AUTHENTICATION){
+        mqtt_topic = "authentication";
+    } else if (extra_message.socket_port == SOCK_PORT_PAY)
+    {
+        mqtt_topic = "payment";
+    }
+    
 
     // memset(payload,0,BUFFER_LENGTH);
     printf("waiting for request...\n");
@@ -259,7 +291,7 @@ static void Data_handle(void * message)
     pubmsg.payloadlen = BUFFER_LENGTH;
     pubmsg.qos = QOS;
     pubmsg.retained = 0;
-    MQTTClient_publishMessage(client, AUTHENTICATION_TOPIC, &pubmsg, &token);
+    MQTTClient_publishMessage(client, mqtt_topic, &pubmsg, &token);
     // printf("Waiting for up to %d seconds for publication of %s\n"
     //         "on topic %s for client with ClientID: %s\n",
     //         (int)(TIMEOUT/1000), payload, AUTHENTICATION_TOPIC, CLIENTID);
