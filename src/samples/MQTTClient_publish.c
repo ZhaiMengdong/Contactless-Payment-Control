@@ -3,7 +3,7 @@
  * @Version: 
  * @Autor: ZMD
  * @Date: 2019-08-30 10:12:25
- * @LastEditTime: 2019-09-02 16:23:45
+ * @LastEditTime: 2019-09-02 16:44:03
  */
 /*******************************************************************************
  * Copyright (c) 2012, 2017 IBM Corp.
@@ -67,6 +67,11 @@ typedef struct
     int socket_port;
 } extra_publish_message;    //网关在传输消息时额外封装的信息
 
+typedef struct{
+    char * client_addr;
+    char * result;
+} return_data;
+
 volatile MQTTClient_deliveryToken deliveredtoken;
 
 void socket_server(int port);
@@ -85,7 +90,7 @@ void mqtt_server();
 
 char * encapsulation_payload(char *data_recv, char *client_addr);
 
-char * parse_payload(char * payload);
+return_data * parse_payload(char * payload);
 
 unsigned char * SM4(char * put_data);
 
@@ -365,6 +370,7 @@ int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *m
 {
     int i;
     char* payloadptr;
+    return_data data;
 
     printf("Message arrived\n");
     printf("     topic: %s\n", topicName);
@@ -372,7 +378,8 @@ int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *m
 
     payloadptr = message->payload;
 
-    parse_payload(payloadptr);
+    data = *parse_payload(payloadptr);
+    printf("result:%s\n",data.result);
 
     for(i=0; i<message->payloadlen; i++)
     {
@@ -435,11 +442,12 @@ char * encapsulation_payload(char *data_recv, char *client_addr){
     return out;
 }
 
-char * parse_payload(char * payload){
+return_data * parse_payload(char * payload){
     char * out;
     cJSON * json, *item;
     char * result;
     char * client_addr;
+    return_data data;
 
     json = cJSON_Parse((char const *)payload);
     if(!json){
@@ -453,7 +461,10 @@ char * parse_payload(char * payload){
         printf("result:%s\n client_addr:%s\n", result, client_addr);
     }
 
-    return result;
+    data.client_addr = client_addr;
+    data.result = result;
+
+    return &data;
     
 }
 
