@@ -3,7 +3,7 @@
  * @Version: 
  * @Autor: ZMD
  * @Date: 2019-08-30 10:12:25
- * @LastEditTime: 2019-09-02 12:25:22
+ * @LastEditTime: 2019-09-02 14:04:39
  */
 /*******************************************************************************
  * Copyright (c) 2012, 2017 IBM Corp.
@@ -51,6 +51,8 @@
 #define SOCK_PORT 9988  //与充电桩通信的socket的端口号
 #define BUFFER_LENGTH 1024
 #define MAX_CONN_LIMIT 512     //MAX connection limit
+
+#define END_FLAG "E_N_D"
 
 SGD_UCHAR KEY[] = {
     0xe2, 0xaf, 0x9b, 0x77, 0xce, 0xb0, 0xc1, 0x6f, 0xcf, 0x21, 0xfb, 0x5e, 0xb5, 0x58, 0xb7, 0xd3 
@@ -184,8 +186,6 @@ static void Data_handle(void * message)
     unsigned char * payload_bytes = NULL;
     char * en_payload = NULL;
 
-    unsigned char payload_message[BUFFER_LENGTH];
-
     // const char * data_send = "Server has received your request!\n";
     int i;
 
@@ -213,6 +213,8 @@ static void Data_handle(void * message)
 
     // data_recv_encrypted = SM4(data_recv);
     // printf("%s", *data_recv_encrypted);
+
+    // strcat(data_recv, end_flag);
 
     payload = encapsulation_payload(data_recv, client_addr);
     // en_payload = encapsulation_payload(data_recv, client_addr);
@@ -250,13 +252,9 @@ static void Data_handle(void * message)
         }
     printf("\n");
 
-    memset(payload_message, 0, BUFFER_LENGTH);
-    printf("拷贝");
-    stpcpy(payload_message, payload_bytes);
-
-    pubmsg.payload = encapsulation_payload_publish(payload_message, strlen(payload));
+    // pubmsg.payload = encapsulation_payload_publish(payload_message, strlen(payload));
     // pubmsg.payload = out;
-    // pubmsg.payload = payload_bytes;
+    pubmsg.payload = payload_bytes;
     // pubmsg.payloadlen = (int)strlen(payload);
     pubmsg.payloadlen = BUFFER_LENGTH;
     pubmsg.qos = QOS;
@@ -394,6 +392,7 @@ char * encapsulation_payload(char *data_recv, char *client_addr){
     cJSON_AddStringToObject(root, "client_addr", client_addr);
     cJSON_AddStringToObject(root, "gateway_id", GATEWAYID);
     out = cJSON_Print(root);
+    strcat(out, END_FLAG);
     return out;
 }
 
