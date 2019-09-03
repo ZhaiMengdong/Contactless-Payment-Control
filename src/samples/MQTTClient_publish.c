@@ -3,7 +3,7 @@
  * @Version: 
  * @Autor: ZMD
  * @Date: 2019-08-30 10:12:25
- * @LastEditTime: 2019-09-03 09:57:29
+ * @LastEditTime: 2019-09-03 10:48:26
  */
 /*******************************************************************************
  * Copyright (c) 2012, 2017 IBM Corp.
@@ -96,6 +96,8 @@ return_data * parse_payload(char * payload);
 unsigned char * SM4(char * put_data);
 
 unsigned char * SM4_ENC_ECB(SGD_HANDLE hSessionHandle, char * put_data);
+
+void put_result_to_socket_client(char* client_addr, char* result);
 
 int main(int argc, char* argv[])
 {
@@ -383,6 +385,8 @@ int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *m
     SGD_UINT32 uiEncDataLength = BUFFER_LENGTH;
     SGD_UINT32 uiDataTmpLength = BUFFER_LENGTH;
     char data_decrypt_string[BUFFER_LENGTH];
+    char* client_addr = NULL;
+    char* result = NULL;
 
     return_data data;
 
@@ -439,6 +443,10 @@ int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *m
 
     data = *parse_payload(data_decrypt_string);
     printf("result:%s\n",data.result);
+    result = data.result;
+    client_addr = data.client_addr;
+    put_result_to_socket_client(client_addr, result);
+
 
     MQTTClient_freeMessage(&message);
     MQTTClient_free(topicName);
@@ -589,4 +597,52 @@ unsigned char * SM4_ENC_ECB(SGD_HANDLE hSessionHandle, char * put_data){
     printf("\n");
 
     return pucEncData;
+}
+
+void put_result_to_socket_client(char* client_addr, char* result){
+    int sockfd;
+    int tempfd;
+    struct sockaddr_in s_addr_in;
+    char data_send[BUFFER_LENGTH];
+    // char data_recv[BUFFER_LENGTH];
+    memset(data_send,0,BUFFER_LENGTH);
+    // memset(data_recv,0,BUFFER_LENGTH);
+
+    sockfd = socket(AF_INET,SOCK_STREAM,0);       //ipv4,TCP
+    if(sockfd == -1)
+    {
+        fprintf(stderr,"socket error!\n");
+        exit(1);
+    }
+
+    //before func connect, set the attr of structure sockaddr.
+    memset(&s_addr_in,0,sizeof(s_addr_in));
+    s_addr_in.sin_addr.s_addr = inet_addr(client_addr);      //trans char * to in_addr_t
+    s_addr_in.sin_family = AF_INET;
+    s_addr_in.sin_port = htons(9978);
+
+    tempfd = connect(sockfd,(struct sockaddr *)(&s_addr_in),sizeof(s_addr_in));
+    printf("建立socket连接");
+    if(tempfd == -1)
+    {
+        fprintf(stderr,"Connect error! \n");
+        exit(1);
+    }
+
+    strcpy(data_send, result);
+    tempfd = write(sockfd, data_send, BUFFER_LENGTH);
+    printf("发送回复报文");
+    if(tempfd == -1){
+        fprintf(stderr,"write error\n");
+            exit(0);
+    }
+
+    // tempfd = read(sockfd,data_recv,BUFFER_LENGTH);
+    // assert(tempfd != -1);
+    // printf("%s\n",data_recv);
+    // memset(data_send,0,BUFFER_LENGTH);
+    // memset(data_recv,0,BUFFER_LENGTH);
+    shutdown(sockfd,SHUT_WR);
+    
+    close(tempfd);
 }
