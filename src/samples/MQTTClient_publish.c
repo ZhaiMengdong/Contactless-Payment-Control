@@ -3,7 +3,7 @@
  * @Version: 
  * @Autor: ZMD
  * @Date: 2019-08-30 10:12:25
- * @LastEditTime: 2019-09-02 16:44:03
+ * @LastEditTime: 2019-09-03 09:57:29
  */
 /*******************************************************************************
  * Copyright (c) 2012, 2017 IBM Corp.
@@ -41,6 +41,7 @@
 #define CLIENTID    "ExampleClientPub"  //向无感支付平台提交信息时的mqtt client id
 #define AUTHENTICATION_RESULT_CLIENTID "authentication_result"  //接收无感支付平台返回信息的mqtt client id
 #define AUTHENTICATION_TOPIC    "authentication"    //进行充电车辆是否开通无感支付认证判断的mqtt client发送报文的主题
+#define PAYMENT_TOPIC   "payment"
 #define SUBSCRIBE_TOPIC_1   "authentication_result" //mqtt client订阅的车辆身份验证的主题
 #define SUBSCRIBE_TOPIC_2   "payment_result"    //mqtt client订阅的支付结果的主题
 #define QOS         2   
@@ -370,6 +371,19 @@ int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *m
 {
     int i;
     char* payloadptr;
+
+    SGD_HANDLE phDeviceHandle;
+	SGD_HANDLE phSessionHandle;
+	SGD_HANDLE phKeyHandle;
+    SGD_UCHAR pucIV[16] ={0};
+	memset(pucIV,1,16);
+    SGD_UCHAR *data_encrypt = (SGD_UCHAR *)malloc(BUFFER_LENGTH);
+    SGD_UCHAR *data_decrypt = (SGD_UCHAR *)malloc(BUFFER_LENGTH);
+    SGD_UINT32 ucAlgId = SGD_SM4_ECB;
+    SGD_UINT32 uiEncDataLength = BUFFER_LENGTH;
+    SGD_UINT32 uiDataTmpLength = BUFFER_LENGTH;
+    char data_decrypt_string[BUFFER_LENGTH];
+
     return_data data;
 
     printf("Message arrived\n");
@@ -378,14 +392,54 @@ int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *m
 
     payloadptr = message->payload;
 
-    data = *parse_payload(payloadptr);
-    printf("result:%s\n",data.result);
-
     for(i=0; i<message->payloadlen; i++)
     {
         putchar(*payloadptr++);
     }
     putchar('\n');
+
+    SGD_RV rv = HSF_ConnectDev(&phDeviceHandle);
+	if(rv != SDR_OK)
+	{
+		printf("HSF_ConnectDev fail\n");
+		return 0;
+	}
+	printf("HSF_ConnectDev success!\n");
+	
+	rv = HSF_OpenSession(phDeviceHandle, &phSessionHandle);
+	if(rv != SDR_OK)
+	{
+		HSF_DisConnectDev(phDeviceHandle);
+		printf("HSF_OpenSession fail\n");
+		return 0;
+	}
+	printf("HSF_OpenSession success!\n");
+
+    data_encrypt = (unsigned char *)message->payload;
+    printf("收到的密文：\n");
+    for (i = 0; i < uiEncDataLength; i ++)
+    {
+        printf("%02x ", data_encrypt[i]);
+    }
+    printf("\n");
+    HSF_DecryptInit(phSessionHandle, 0, KEY, pucIV, ucAlgId);
+    HSF_Decrypt(phSessionHandle, data_encrypt, uiEncDataLength, data_decrypt, &uiDataTmpLength);
+    // HSF_Encrypt(hSessionHandle, data_encrypt, uiEncDataLength, data_decrypt, &uiEncDataLength);
+    printf("解密数据：\n");
+    for (i = 0; i < uiDataTmpLength; i ++)
+    {
+            printf("%02x ", data_decrypt[i]);
+    }
+    printf("\n");
+
+    for(i=0;i<BUFFER_LENGTH;i++){
+        data_decrypt_string[i] = (char)data_decrypt[i];
+    }
+    printf("明文：%s\n", data_decrypt_string);
+
+    data = *parse_payload(data_decrypt_string);
+    printf("result:%s\n",data.result);
+
     MQTTClient_freeMessage(&message);
     MQTTClient_free(topicName);
     return 1;
