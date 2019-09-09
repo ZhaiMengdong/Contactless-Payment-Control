@@ -27,8 +27,8 @@
 2. 解压到合适的目录（以`/root`为例）
 3. 切换目录至`/root/paho.mqtt.c-master`
 4. 执行`make clean`
-5. 执行'make'
-6. 执行'make install'（这一步可能不会成功，但不会对控件的使用产生影响）
+5. 执行`make`
+6. 执行`make install`（这一步可能不会成功，但不会对控件的使用产生影响）
 7. 执行`./root/paho.mqtt.c-master/build/output/samples/MQTTClient_publish`即可运行支付控件
 
 ### 关于加解密
