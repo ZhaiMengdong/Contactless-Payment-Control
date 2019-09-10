@@ -416,11 +416,6 @@ int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *m
     printf("Message arrived\n");
     printf("     topic: %s\n", topicName);
     printf("   message: ");
-    for (i = 0; i < message->payloadlen; i++)
-    {
-        putchar(*payloadptr++);
-    }
-    putchar('\n');
 
     //ukey解密初始化
     SGD_RV rv = HSF_ConnectDev(&phDeviceHandle);
