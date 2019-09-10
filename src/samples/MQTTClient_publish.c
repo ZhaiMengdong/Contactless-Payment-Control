@@ -74,6 +74,9 @@ typedef struct
     char *result;
 } return_data;
 
+SGD_HANDLE phDeviceHandle;
+SGD_HANDLE phSessionHandle;
+
 volatile MQTTClient_deliveryToken deliveredtoken;
 
 void socket_server(int port);
@@ -94,10 +97,6 @@ char *encapsulation_payload(char *data_recv, char *client_addr);
 
 return_data *parse_payload(char *payload);
 
-unsigned char *SM4(char *put_data);
-
-unsigned char *SM4_ENC_ECB(SGD_HANDLE hSessionHandle, char *put_data);
-
 void put_result_to_socket_client(char *client_addr, char *result);
 
 int main(int argc, char *argv[])
@@ -106,6 +105,22 @@ int main(int argc, char *argv[])
     pthread_t mqtt_server_id;   //mqtt服务线程
     pthread_t socket_authentication;    //接收充电桩发送的车辆身份认证请求的服务线程
     pthread_t socket_pay;   //接收充电桩发送的支付请求的服务线程
+
+    SGD_RV rv = HSF_ConnectDev(&phDeviceHandle);
+	if(rv != SDR_OK)
+	{
+		printf("HSF_ConnectDev fail\n");
+		return 0;
+	}
+	printf("HSF_ConnectDev success!\n");	
+	rv = HSF_OpenSession(phDeviceHandle, &phSessionHandle);
+	if(rv != SDR_OK)
+	{
+		HSF_DisConnectDev(phDeviceHandle);
+		printf("HSF_OpenSession fail\n");
+		return 0;
+	}
+	printf("HSF_OpenSession success!\n");
 
     //开启一个线程用来启动一个mqtt client，该client用来接收无感支付平台发送的信息
     if (pthread_create(&mqtt_server_id, NULL, (void *)(&mqtt_server), NULL))
@@ -237,6 +252,17 @@ static void Data_handle(void *message)
     unsigned char *payload_bytes = NULL;    //加密后的消息
     int i;
 
+    SGD_RV rv = SDR_OK;
+    SGD_UCHAR pucIV[16] ={0};
+	memset(pucIV,1,16);
+    SGD_UCHAR *pucData = (SGD_UCHAR *)malloc(BUFFER_LENGTH);    //待加密的明文
+    memset(pucData, 0x05, BUFFER_LENGTH);
+    SGD_UINT32 uiDataLength = BUFFER_LENGTH;
+    SGD_UCHAR *pucEncData = (SGD_UCHAR *)malloc(BUFFER_LENGTH); //加密后的密文
+    memset(pucEncData, 0, BUFFER_LENGTH);
+    SGD_UINT32 uiEncDataLength = BUFFER_LENGTH;
+    SGD_UINT32 ucAlgId = SGD_SM4_ECB;
+
     //mqtt client相关变量定义
     MQTTClient client;
     MQTTClient_connectOptions conn_opts = MQTTClient_connectOptions_initializer;
@@ -279,11 +305,23 @@ static void Data_handle(void *message)
     printf("封装后报文长度：%d\n", strlen(payload));
 
     //使用sm4对待发送的消息内容进行加密
-    payload_bytes = SM4(payload);
+    pucData = (unsigned char *)payload;
+    rv = HSF_EncryptInit(phSessionHandle, 0, KEY, pucIV, ucAlgId);
+	if(rv != SDR_OK)
+	{
+		printf("HSF_EncryptInit failed rv = 0x%08x\n", rv);
+		return rv;
+	}
+	rv = HSF_Encrypt(phSessionHandle, pucData, uiDataLength, pucEncData, &uiEncDataLength);
+	if(rv != SDR_OK)
+	{
+		printf("HSF_Encrypt failed rv = 0x%08x\n", rv);
+		return rv;
+	}
 
     for (i = 0; i < BUFFER_LENGTH; i++)
     {
-        printf("%02x ", payload_bytes[i]);
+        printf("%02x ", pucEncData[i]);
     }
     printf("\n");
 
@@ -303,14 +341,14 @@ static void Data_handle(void *message)
     printf("发送前的报文：\n");
     for (i = 0; i < BUFFER_LENGTH; i++)
     {
-        printf("%02x ", payload_bytes[i]);
+        printf("%02x ", pucEncData[i]);
     }
     printf("\n");
 
     // pubmsg.payload = encapsulation_payload_publish(payload_message, strlen(payload));
     // pubmsg.payload = out;
     //设置发送的消息内容
-    pubmsg.payload = payload_bytes;
+    pubmsg.payload = pucEncData;
     // pubmsg.payloadlen = (int)strlen(payload);
     pubmsg.payloadlen = BUFFER_LENGTH;
     pubmsg.qos = QOS;
@@ -326,6 +364,8 @@ static void Data_handle(void *message)
     //Clear
     printf("terminating current client_connection...\n");
     close(fd);          //close a file descriptor.
+    free(pucData);
+    free(pucEncData);
     pthread_exit(NULL); //terminate calling thread!
 }
 
@@ -397,9 +437,6 @@ int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *m
 {
     int i;
 
-    SGD_HANDLE phDeviceHandle;
-    SGD_HANDLE phSessionHandle;
-    SGD_HANDLE phKeyHandle;
     SGD_UCHAR pucIV[16] = {0};
     memset(pucIV, 1, 16);
     SGD_UCHAR *data_encrypt = (SGD_UCHAR *)malloc(BUFFER_LENGTH);   //收到的密文
@@ -416,24 +453,6 @@ int msgarrvd(void *context, char *topicName, int topicLen, MQTTClient_message *m
     printf("Message arrived\n");
     printf("     topic: %s\n", topicName);
     printf("   message: ");
-
-    //ukey解密初始化
-    SGD_RV rv = HSF_ConnectDev(&phDeviceHandle);
-    if (rv != SDR_OK)
-    {
-        printf("HSF_ConnectDev fail\n");
-        return 0;
-    }
-    printf("HSF_ConnectDev success!\n");
-
-    rv = HSF_OpenSession(phDeviceHandle, &phSessionHandle);
-    if (rv != SDR_OK)
-    {
-        HSF_DisConnectDev(phDeviceHandle);
-        printf("HSF_OpenSession fail\n");
-        return 0;
-    }
-    printf("HSF_OpenSession success!\n");
 
     data_encrypt = (unsigned char *)message->payload;
     printf("收到的密文：\n");
@@ -577,84 +596,6 @@ return_data *parse_payload(char *payload)
     data.result = result;
 
     return &data;
-}
-
-/**
- * @description: 使用ukey进行sm4加密
- * @author: ZMD
- * @LastEditTime: Do not edit
- * @Date: 2019-09-03 15:46:41
- */
-unsigned char *SM4(char *put_data)
-{
-    //初始化
-    SGD_HANDLE phDeviceHandle;
-    SGD_HANDLE phSessionHandle;
-    SGD_HANDLE phKeyHandle;
-
-    SGD_RV rv = HSF_ConnectDev(&phDeviceHandle);
-    if (rv != SDR_OK)
-    {
-        printf("HSF_ConnectDev fail\n");
-        return 0;
-    }
-    printf("HSF_ConnectDev success!\n");
-
-    rv = HSF_OpenSession(phDeviceHandle, &phSessionHandle);
-    if (rv != SDR_OK)
-    {
-        HSF_DisConnectDev(phDeviceHandle);
-        printf("HSF_OpenSession fail\n");
-        return 0;
-    }
-    printf("HSF_OpenSession success!\n");
-
-    printf("%s\n", put_data);
-
-    //进行加密
-    return SM4_ENC_ECB(phSessionHandle, put_data);
-}
-
-/**
- * @description: 使用ukey进行sm4加密的具体实现
- * @author: ZMD
- * @LastEditTime: Do not edit
- * @Date: 2019-09-03 15:47:25
- */
-unsigned char *SM4_ENC_ECB(SGD_HANDLE hSessionHandle, char *put_data)
-{
-
-    SGD_UCHAR pucIV[16] = {0};
-    memset(pucIV, 1, 16);
-    int data_length = strlen(put_data);
-    SGD_UCHAR *pucData = (SGD_UCHAR *)malloc(BUFFER_LENGTH);    //待加密的明文
-    memset(pucData, 0x05, BUFFER_LENGTH);
-    SGD_UINT32 uiDataLength = BUFFER_LENGTH;
-    SGD_UCHAR *pucEncData = (SGD_UCHAR *)malloc(BUFFER_LENGTH); //加密后的密文
-    SGD_UINT32 uiEncDataLength = BUFFER_LENGTH;
-    SGD_UCHAR *pucDataTmp = (SGD_UCHAR *)malloc(BUFFER_LENGTH);
-    SGD_UINT32 uiDataTmpLength = BUFFER_LENGTH;
-    SGD_UINT32 ucAlgId = SGD_SM4_ECB;
-
-    int i = 0;
-
-    printf("报文长度：%d\n", data_length);
-    memset(pucEncData, 0, BUFFER_LENGTH);
-    pucData = (SGD_UCHAR *)put_data;
-    
-    HSF_EncryptInit(hSessionHandle, 0, KEY, pucIV, ucAlgId);
-
-    //加密
-    HSF_Encrypt(hSessionHandle, pucData, uiDataLength, pucEncData, &uiEncDataLength);
-
-    printf("加密后的数据:\n");
-    for (i = 0; i < uiEncDataLength; i++)
-    {
-        printf("%02x ", pucEncData[i]);
-    }
-    printf("\n");
-
-    return pucEncData;
 }
 
 /**
