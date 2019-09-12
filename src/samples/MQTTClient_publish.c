@@ -3,7 +3,7 @@
  * @Version: 
  * @Autor: ZMD
  * @Date: 2019-08-30 10:12:25
- * @LastEditTime: 2019-09-03 15:54:33
+ * @LastEditTime: 2019-09-12 11:21:25
  */
 /*******************************************************************************
  * Copyright (c) 2012, 2017 IBM Corp.
@@ -42,8 +42,8 @@
 #define AUTHENTICATION_RESULT_CLIENTID "authentication_result" //接收无感支付平台返回信息的mqtt client id
 #define AUTHENTICATION_TOPIC "authentication"                  //进行充电车辆是否开通无感支付认证判断的mqtt client发送报文的主题
 #define PAYMENT_TOPIC "payment"                                //进行支付的mqtt client发送报文的主题
-#define SUBSCRIBE_TOPIC_1 "authentication_result"              //mqtt client订阅的车辆身份验证的主题
-#define SUBSCRIBE_TOPIC_2 "payment_result"                     //mqtt client订阅的支付结果的主题
+#define SUBSCRIBE_TOPIC_1 "201908280033_authentication"              //mqtt client订阅的车辆身份验证的主题
+#define SUBSCRIBE_TOPIC_2 "201908280033_payment"                     //mqtt client订阅的支付结果的主题
 #define QOS 2
 #define TIMEOUT 10000L
 #define GATEWAYID "201908280033" //网关id
