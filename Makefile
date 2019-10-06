@@ -232,7 +232,7 @@ ${ASYNC_SSL_TESTS}: ${blddir}/test/%: ${srcdir}/../test/%.c $(MQTTLIB_CS_TARGET)
 	${CC} -g -o $@ $< -l${MQTTLIB_AS} ${FLAGS_EXES}
 
 ${SYNC_SAMPLES}: ${blddir}/samples/%: ${srcdir}/samples/%.c $(MQTTLIB_C_TARGET) 
-	${CC} -o $@ $< -l${MQTTLIB_CS} -lhs_guomi ${FLAGS_EXES} 
+	${CC} -g -o $@ $< -l${MQTTLIB_CS} -lhs_guomi ${FLAGS_EXES} 
 	
 ${SYNC_UTILS}: ${blddir}/samples/%: ${srcdir}/samples/%.c ${srcdir}/samples/pubsub_opts.c $(MQTTLIB_CS_TARGET)
 	${CC} -o $@ $< -l${MQTTLIB_CS} ${FLAGS_EXES} ${srcdir}/samples/pubsub_opts.c

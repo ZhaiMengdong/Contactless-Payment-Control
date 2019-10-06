@@ -49,7 +49,8 @@ int main()
     }
 
     // strcpy(data_send, "LSGJA52U1BH003531");
-    strcpy(data_send, "{\"title\":\"authentication\",\"data\":\"LSGJA52U1BH003531\"}");
+    // strcpy(data_send, "{\"title\":\"authentication\",\"data\":\"LSGJA52U1BH003531\"}");
+    strcpy(data_send, "{\"title\": \"Vin\", \"properties\": {\"vendorId\": \"4179187517\", \"data\": \"LSGJA52U1BH003531\"}}");
     tempfd = write(sockfd, data_send, BUFFER_LENGTH);
     printf("发送模拟报文");
     if(tempfd == -1){

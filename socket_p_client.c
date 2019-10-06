@@ -49,7 +49,8 @@ int main()
     }
 
     // strcpy(data_send, "LSGJA52U1BH003531");
-    strcpy(data_send, "{\"title\":\"payment\",\"data\":\"LSGJA52U1BH003531\"}");
+    // strcpy(data_send, "{\"title\":\"payment\",\"data\":\"LSGJA52U1BH003531\"}");
+    strcpy(data_send, "{\"title\":\"pay\",\"properties\":{\"meterStop\":\"30\",\"vendorId\":\"4179187517\",\"reason\":\"EVDisconnected\",\"transactionData\":{\"sampledValue\":{\"items\":{\"location\":\"114.064506,22.549258\"}}}}}");
     tempfd = write(sockfd, data_send, BUFFER_LENGTH);
     printf("发送模拟报文");
     if(tempfd == -1){

@@ -530,6 +530,7 @@ void mqtt_server()
     //订阅相关主题消息
     MQTTClient_subscribe(client, SUBSCRIBE_TOPIC_1, QOS);
     MQTTClient_subscribe(client, SUBSCRIBE_TOPIC_2, QOS);
+    printf("已订阅两个主题");
 
     do
     {
